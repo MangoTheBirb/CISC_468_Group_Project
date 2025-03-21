@@ -298,6 +298,28 @@ class MyListener(ServiceListener):
         except Exception as e:
             print(f"Failed to send file to peer {peer_ip}:{peer_port}: {e}")
 
+    def request_peer_files(self, peer_ip, peer_port):
+        """Request list of files from a peer"""
+        try:
+            # Create new connection for file list request
+            conn = socket.create_connection((peer_ip, peer_port))
+            
+            # Authenticate first
+            if not authenticate_connection(conn, self.private_key, self.public_key):
+                conn.close()
+                return []
+
+            # Request file list
+            conn.sendall("LIST_FILES".encode())
+            
+            # Receive file list
+            file_list = conn.recv(1024).decode().split('\n')
+            conn.close()
+            return file_list
+        except Exception as e:
+            print(f"Failed to get file list from peer {peer_ip}:{peer_port}: {e}")
+            return []
+
 # Discover peers using mDNS
 def discover_peers(local_ip, service_name, private_key, public_key):
     zeroconf = Zeroconf()
@@ -324,13 +346,21 @@ if __name__ == "__main__":
 
         # Command interface
         while True:
-            command = input("\nEnter command (list/request/send/exit): ").strip().lower()
+            command = input("\nEnter command (list/peer-list/request/send/exit): ").strip().lower()
             
             if command == 'exit':
                 break
                 
             elif command == 'list':
-                print("\nAvailable files:", get_shared_files())
+                print("\nMy available files:", get_shared_files())
+                
+            elif command == 'peer-list':
+                peer_ip = input("Enter peer IP: ")
+                peer_port = int(input("Enter peer port: "))
+                files = listener.request_peer_files(peer_ip, peer_port)
+                print(f"\nFiles available from peer {peer_ip}:{peer_port}:")
+                for file in files:
+                    print(f"- {file}")
                 
             elif command == 'request':
                 peer_ip = input("Enter peer IP: ")
