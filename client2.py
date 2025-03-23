@@ -11,9 +11,6 @@ SERVICE_TYPE = "_p2pfileshare._tcp.local."
 SERVICE_NAME = "ClientB._p2pfileshare._tcp.local."
 PORT = 5001
 
-# Dictionary to store peer keys
-peer_keys = {}
-
 SHARED_FILES_DIR = "shared_files"
 if not os.path.exists(SHARED_FILES_DIR):
     os.makedirs(SHARED_FILES_DIR)
@@ -172,12 +169,7 @@ def authenticate_connection(conn, private_key, public_key):
         print(f"Authentication failed: {e}")
         return False
 
-def update_peer_key(addr, new_public_key):
-    """Update stored public key for a peer"""
-    # You'll need to maintain a dictionary of peer keys
-    peer_keys[addr] = new_public_key
-
-# Update the handle_client function to handle key changes
+# Handle incoming connections
 def handle_client(conn, addr, private_key, public_key):
     print(f"Connected to {addr}")
     try:
@@ -191,37 +183,6 @@ def handle_client(conn, addr, private_key, public_key):
             if not data:
                 break
                 
-            if data == "KEY_CHANGE":
-                # Receive new public key
-                new_public_key_bytes = conn.recv(1024)
-                new_public_key = deserialize_public_key(new_public_key_bytes)
-                
-                # Receive signature
-                signature = conn.recv(256)
-                
-                try:
-                    # Verify signature using old public key
-                    public_key.verify(
-                        signature,
-                        serialize_public_key(new_public_key),
-                        padding.PSS(
-                            mgf=padding.MGF1(hashes.SHA256()),
-                            salt_length=padding.PSS.MAX_LENGTH
-                        ),
-                        hashes.SHA256()
-                    )
-                    
-                    # Update stored public key for this peer
-                    update_peer_key(addr, new_public_key)
-                    
-                    # Acknowledge key change
-                    conn.sendall(b"KEY_UPDATED")
-                    print(f"Updated public key for peer {addr}")
-                    
-                except Exception as e:
-                    print(f"Failed to verify new key from {addr}: {e}")
-                    conn.sendall(b"KEY_REJECTED")
-                    
             if data == "LIST_FILES":
                 files = get_shared_files()
                 conn.sendall('\n'.join(files).encode())
@@ -269,7 +230,6 @@ class MyListener(ServiceListener):
         self.service_name = service_name
         self.private_key = private_key
         self.public_key = public_key
-        self.known_peers = []  # Change to list instead of dictionary
 
     def add_service(self, zeroconf, type, name):
         info = zeroconf.get_service_info(type, name)
@@ -288,76 +248,15 @@ class MyListener(ServiceListener):
     def connect_to_peer(self, peer_ip, peer_port):
         try:
             conn = socket.create_connection((peer_ip, peer_port))
-            # Add peer to known_peers if not already present
-            peer = (peer_ip, peer_port)
-            if peer not in self.known_peers:
-                self.known_peers.append(peer)
-            
-            # Create a new thread for handling the connection
-            threading.Thread(target=handle_client, 
-                           args=(conn, (peer_ip, peer_port), self.private_key, self.public_key)).start()
+            handle_client(conn, (peer_ip, peer_port), self.private_key, self.public_key)
         except Exception as e:
             print(f"Failed to connect to peer {peer_ip}:{peer_port}: {e}")
 
-    def authenticate_connection(self, conn, private_key, public_key):
-        """Authenticate connection with peer"""
-        try:
-            # Add message markers for proper framing
-            conn.sendall(b"BEGIN_KEY\n")
-            conn.sendall(serialize_public_key(public_key))
-            conn.sendall(b"END_KEY\n")
-            
-            # Read peer's public key
-            data = b""
-            while b"BEGIN_KEY\n" not in data:
-                data += conn.recv(1024)
-            data = data.split(b"BEGIN_KEY\n")[1]
-            
-            while b"END_KEY\n" not in data:
-                data += conn.recv(1024)
-            peer_public_key_bytes = data.split(b"END_KEY\n")[0]
-            
-            peer_public_key = deserialize_public_key(peer_public_key_bytes)
-            print(f"Received peer public key")
+    def remove_service(self, zeroconf, type, name):
+        print(f"Service removed: {name}")
 
-            # Continue with challenge verification
-            challenge = b"authentication challenge"
-            signature = private_key.sign(
-                challenge,
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
-                ),
-                hashes.SHA256()
-            )
-            
-            conn.sendall(b"BEGIN_SIG\n")
-            conn.sendall(signature)
-            conn.sendall(b"END_SIG\n")
-            
-            # Read peer's signature
-            data = b""
-            while b"BEGIN_SIG\n" not in data:
-                data += conn.recv(1024)
-            data = data.split(b"BEGIN_SIG\n")[1]
-            
-            while b"END_SIG\n" not in data:
-                data += conn.recv(1024)
-            peer_signature = data.split(b"END_SIG\n")[0]
-
-            peer_public_key.verify(
-                peer_signature,
-                challenge,
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
-                ),
-                hashes.SHA256()
-            )
-            return True
-        except Exception as e:
-            print(f"Authentication failed: {e}")
-            return False
+    def update_service(self, zeroconf, type, name):
+        print(f"Service updated: {name}")
 
     def request_file_from_peer(self, peer_ip, peer_port, filename):
         """Request a file from a peer"""
@@ -421,65 +320,6 @@ class MyListener(ServiceListener):
             print(f"Failed to get file list from peer {peer_ip}:{peer_port}: {e}")
             return []
 
-    def migrate_to_new_key(self):
-        """Migrate to a new key pair and notify peers"""
-        try:
-            # Generate new key pair
-            new_private_key, new_public_key = generate_key_pair()
-            
-            # Store old keys temporarily for verification
-            old_private_key = self.private_key
-            old_public_key = self.public_key
-            
-            # Update keys
-            self.private_key = new_private_key
-            self.public_key = new_public_key
-            
-            # Sign the new public key with the old private key for verification
-            signature = old_private_key.sign(
-                serialize_public_key(new_public_key),
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH
-                ),
-                hashes.SHA256()
-            )
-            
-            # Notify all known peers
-            self.notify_peers_of_key_change(new_public_key, signature)
-            
-            print("Successfully migrated to new key pair")
-            return True
-        except Exception as e:
-            print(f"Failed to migrate to new key: {e}")
-            return False
-
-    def notify_peers_of_key_change(self, new_public_key, signature):
-        """Notify all known peers about the key change"""
-        for peer in self.known_peers:
-            try:
-                conn = socket.create_connection(peer)
-                
-                # Send key change notification
-                conn.sendall(b"KEY_CHANGE")
-                
-                # Send new public key
-                conn.sendall(serialize_public_key(new_public_key))
-                
-                # Send signature of new key signed with old key
-                conn.sendall(signature)
-                
-                # Wait for acknowledgment
-                response = conn.recv(1024).decode()
-                if response == "KEY_UPDATED":
-                    print(f"Peer {peer} acknowledged key change")
-                else:
-                    print(f"Peer {peer} failed to acknowledge key change")
-                    
-                conn.close()
-            except Exception as e:
-                print(f"Failed to notify peer {peer} of key change: {e}")
-
 # Discover peers using mDNS
 def discover_peers(local_ip, service_name, private_key, public_key):
     zeroconf = Zeroconf()
@@ -506,17 +346,11 @@ if __name__ == "__main__":
 
         # Command interface
         while True:
-            command = input("\nEnter command (list/peer-list/request/send/migrate/exit): ").strip().lower()
+            command = input("\nEnter command (list/peer-list/request/send/exit): ").strip().lower()
             
             if command == 'exit':
                 break
                 
-            elif command == 'migrate':
-                if listener.migrate_to_new_key():
-                    print("Key migration successful")
-                else:
-                    print("Key migration failed")
-            
             elif command == 'list':
                 print("\nMy available files:", get_shared_files())
                 
