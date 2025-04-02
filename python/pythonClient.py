@@ -69,13 +69,12 @@ def request_file_list(peer_ip, peer_port):
         return []
 
 # filepath: c:\Users\ww2ct\Documents\GitHub\CISC_468_Group_Project\pythonClientB.py
-def handle_client(conn, addr, private_key, public_key):
+def handle_client(conn, addr, private_key, public_key, key_manager):
     print(f"Connected to {addr}")
     try:
-        # Exchange public keys
+        # Exchange public keys (RSA)
         conn.sendall(serialize_public_key(public_key))
-        peer_public_key_bytes = conn.recv(2048)  # Increase buffer size
-        print(f"Received public key bytes from {addr}: {peer_public_key_bytes}")
+        peer_public_key_bytes = conn.recv(2048)
         peer_public_key = deserialize_public_key(peer_public_key_bytes)
         print(f"Received public key from {addr}")
 
@@ -102,29 +101,55 @@ def handle_client(conn, addr, private_key, public_key):
         )
         print(f"Identity of {addr} verified")
 
+        # Perform Diffie-Hellman key exchange
+        dh_public = key_manager.initialize_dh()
+        conn.sendall(len(dh_public).to_bytes(4, 'big') + dh_public)
+        
+        # Receive peer's DH public key
+        peer_dh_len = int.from_bytes(conn.recv(4), 'big')
+        peer_dh_public = conn.recv(peer_dh_len)
+        
+        # Create session
+        session = key_manager.create_session(addr[0], peer_dh_public)
+        print(f"Established encrypted session with {addr}")
+
         while True:
-            data = conn.recv(1024).decode()
-            if not data:
+            # Receive encrypted data
+            msg_len = int.from_bytes(conn.recv(4), 'big')
+            if msg_len == 0:
                 break
+            encrypted_data = conn.recv(msg_len)
+            data = session.decrypt(encrypted_data).decode()
+
             if data == "REQUEST_FILE_LIST":
                 files = get_shared_files()
-                conn.sendall("\n".join(files).encode())
+                response = "\n".join(files).encode()
+                encrypted_response = session.encrypt(response)
+                conn.sendall(len(encrypted_response).to_bytes(4, 'big') + encrypted_response)
             elif data.startswith("REQUEST_FILE:"):
                 filename = data.split(":", 1)[1]
                 consent = input(f"Peer {addr} is requesting file '{filename}'. Do you consent? (yes/no): ")
                 if consent.lower() == "yes":
-                    send_file(conn, filename)
+                    # Encrypt and send file
+                    with open(os.path.join("shared_files", filename), "rb") as f:
+                        file_data = f.read()
+                        encrypted_file = session.encrypt(file_data)
+                        conn.sendall(len(encrypted_file).to_bytes(4, 'big') + encrypted_file)
                 else:
-                    print(f"Consent denied for file '{filename}'")
+                    conn.sendall((0).to_bytes(4, 'big'))
             elif data.startswith("SEND_FILE:"):
                 filename = data.split(":", 1)[1]
                 consent = input(f"Peer {addr} wants to send file '{filename}'. Do you consent? (yes/no): ")
                 if consent.lower() == "yes":
-                    receive_file(conn, filename)
+                    # Receive and decrypt file
+                    msg_len = int.from_bytes(conn.recv(4), 'big')
+                    if msg_len > 0:
+                        encrypted_file = conn.recv(msg_len)
+                        file_data = session.decrypt(encrypted_file)
+                        with open(os.path.join("shared_files", filename), "wb") as f:
+                            f.write(file_data)
                 else:
-                    print(f"Consent denied for file '{filename}'")
-            else:
-                print(f"Received from {addr}: {data}")
+                    conn.sendall((0).to_bytes(4, 'big'))
     except Exception as e:
         print(f"Error handling client {addr}: {e}")
     finally:
