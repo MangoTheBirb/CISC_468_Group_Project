@@ -36,6 +36,7 @@ class ServerListener():
         self._server_actions = {
             b"INITIAL AUTHENTICATION": self.handle_initial_authentication,
             b"RENEW KEYS": self.handle_renew_keys,
+            b"RECEIVE_FILE": self.handle_receive_file,
         }
 
     def stop(self):
@@ -124,3 +125,22 @@ class ServerListener():
             print(f"Peer {addr} renewed keys")
         except Exception as e:
             print(f"Failed to renew keys for peer {addr}: {e}")
+
+
+    def handle_receive_file(self, addr, data):
+        print("addr", addr)
+        print("data", data)
+        
+        try:
+            # Get the filename from data list (decode filename since it's text)
+            filename = data[1].decode('utf-8')
+            # Keep file_content as bytes without decoding
+            file_content = data[2]
+            
+            # Save the file in binary mode
+            with open(filename, "wb") as f:
+                f.write(file_content)
+            print(f"Received file {filename} from {addr}")
+            
+        except Exception as e:
+            print(f"Failed to save file {filename}: {e}")

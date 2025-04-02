@@ -1,8 +1,9 @@
 import cmd
-
+import os
 from peerDiscovery import PeerConnectionListener
 from peerKeys import KeyManager, initialize_client_keys, serialize_public_key
 from peerFiles import remove_shared_file, add_shared_file, get_shared_files
+SHARED_FILES_DIR = "shared_files"
 
 class CliManager(cmd.Cmd):
     def __init__(self, peer_listener: PeerConnectionListener, key_manager: KeyManager):
@@ -39,7 +40,39 @@ class CliManager(cmd.Cmd):
     def do_send(self, line):
         """Send a shared file to a given peer.
         send <peer_display_name> <filename>"""
-        pass
+        
+        parts = line.strip().split()
+        if len(parts) != 2:
+            print("Usage: send <peer_display_name> <filename>")
+            return
+
+        peer_display_name = parts[0]
+        filename = parts[1]
+        
+        # Find the peer in the peer list
+        peer = None
+        for p in self.peer_listener.peers.values():
+            if p.display_name == peer_display_name:
+                peer = p
+                break
+                
+        if peer is None:
+            print(f"Peer {peer_display_name} not found.")
+            return  
+            
+        filepath = os.path.join(SHARED_FILES_DIR, filename)
+        if not os.path.exists(filepath):
+            print(f"File {filepath} does not exist.")
+            return
+            
+        try:
+            with open(filepath, "rb") as f:
+                file_data = f.read()
+            # Send the file data to the peer
+            peer.send_command(b"RECEIVE_FILE", filename.encode(), file_data)
+            print(f"Successfully sent file {filename} to {peer_display_name}")
+        except Exception as e:
+            print(f"Error sending file: {e}")
 
     def do_list_shared_files(self, line):
         """List all shared files"""
