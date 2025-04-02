@@ -84,7 +84,7 @@ class CliManager(cmd.Cmd):
             with open(filepath, "rb") as f:
                 file_data = f.read()
             # Send the file data to the peer
-            peer.send_command(b"RECEIVE_FILE", filename.encode(), file_data)
+            peer.send_command(b"RECEIVE_FILE", file_data,filename.encode())
             print(f"Successfully sent file {filename} to {peer_display_name}")
         except Exception as e:
             print(f"Error sending file: {e}")
