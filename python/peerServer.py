@@ -57,15 +57,13 @@ class ServerListener():
                 break
             try:
                 conn, addr = self.server.accept()
-                # Pass key_manager to handle_client
-                self.handle_client(conn, addr, self.key_manager.private_key, 
-                                   self.key_manager.public_key, self.key_manager)
+                if self.stopped():
+                    break
+                threading.Thread(target=self.handle_client, args=(conn, addr)).start()
             except socket.timeout:
-                continue
-            except Exception as e:
-                print(f"Error accepting connection: {e}")
+                pass
     
-    def handle_client(self, conn: socket.socket, addr, private_key=None, public_key=None, key_manager=None):
+    def handle_client(self, conn: socket.socket, addr):
         try:
             data = conn.recv(4096)
             if not data:
