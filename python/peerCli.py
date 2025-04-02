@@ -1,9 +1,8 @@
 import cmd
-import socket
 
 from peerDiscovery import PeerConnectionListener
 from peerKeys import KeyManager, initialize_client_keys, serialize_public_key
-from peerFiles import remove_shared_file, add_shared_file, get_shared_files, send_file_to_peer, receive_file_from_peer
+from peerFiles import remove_shared_file, add_shared_file, get_shared_files
 
 class CliManager(cmd.Cmd):
     def __init__(self, peer_listener: PeerConnectionListener, key_manager: KeyManager):
@@ -34,53 +33,13 @@ class CliManager(cmd.Cmd):
 
     def do_request(self, line):
         """Request to download a shared file from an available peer.
-        request <peer_display_name> <filename>"""
-        try:
-            peer_name, filename = line.split()
-            # Find peer by display name
-            peer = next((p for p in self.peer_listener.peers.values() 
-                        if p.display_name == peer_name), None)
-            if not peer:
-                print(f"Peer {peer_name} not found")
-                return
-            
-            # Create connection and request file
-            conn = socket.create_connection((peer.ip, peer.port))
-            conn.sendall(f"REQUEST_FILE:{filename}".encode())
-            
-            # Receive file
-            if receive_file_from_peer(conn, filename):
-                print(f"Successfully received {filename} from {peer_name}")
-            conn.close()
-        except Exception as e:
-            print(f"Error requesting file: {e}")
+        request <file_hash>"""
+        pass
 
     def do_send(self, line):
         """Send a shared file to a given peer.
         send <peer_display_name> <filename>"""
-        try:
-            peer_name, filename = line.split()
-            # Find peer by display name
-            peer = next((p for p in self.peer_listener.peers.values() 
-                        if p.display_name == peer_name), None)
-            if not peer:
-                print(f"Peer {peer_name} not found")
-                return
-                
-            # Verify file exists
-            if filename not in get_shared_files():
-                print(f"File {filename} not found in shared files")
-                return
-                
-            # Create connection and send file
-            conn = socket.create_connection((peer.ip, peer.port))
-            conn.sendall(f"SEND_FILE:{filename}".encode())
-            
-            # Send file
-            send_file_to_peer(conn, filename)
-            conn.close()
-        except Exception as e:
-            print(f"Error sending file: {e}")
+        pass
 
     def do_list_shared_files(self, line):
         """List all shared files"""
