@@ -37,6 +37,7 @@ class ServerListener():
             b"INITIAL AUTHENTICATION": self.handle_initial_authentication,
             b"RENEW KEYS": self.handle_renew_keys,
             b"RECEIVE_FILE": self.handle_receive_file,
+            b"REQUEST_FILE": self.handle_receive_file #change later
         }
 
     def stop(self):

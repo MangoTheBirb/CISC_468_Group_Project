@@ -35,6 +35,21 @@ class CliManager(cmd.Cmd):
     def do_request(self, line):
         """Request to download a shared file from an available peer.
         request <file_hash>"""
+        print(line)
+        parts = line.strip().split()
+        peer_display_name = parts[0]
+        filename = parts[1]
+        # Find the peer in the peer list
+        peer = None
+        for p in self.peer_listener.peers.values():
+            if p.display_name == peer_display_name:
+                peer = p
+                break
+        
+        if peer is None:
+            print(f"Peer {peer_display_name} not found.")
+            return
+        
         pass
 
     def do_send(self, line):
