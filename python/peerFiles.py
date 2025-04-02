@@ -39,3 +39,60 @@ def remove_shared_file(filename):
         print(f"Removed file: {filename}")
     except Exception as e:
         print(f"Error deleting file: {filename}: {e}")
+
+def send_file_to_peer(conn, filename):
+    """Send a file to peer"""
+    filepath = os.path.join(SHARED_FILES_DIR, filename)
+    try:
+        # Send file size first
+        file_size = os.path.getsize(filepath)
+        conn.sendall(f"{file_size}\n".encode())
+        
+        # Wait for ready signal
+        if conn.recv(1024).decode().strip() != "READY":
+            raise Exception("Peer not ready to receive")
+            
+        # Send file data in chunks
+        with open(filepath, "rb") as f:
+            while True:
+                chunk = f.read(4096)
+                if not chunk:
+                    break
+                conn.sendall(chunk)
+        
+        # Wait for confirmation
+        if conn.recv(1024).decode().strip() != "RECEIVED":
+            raise Exception("File transfer not confirmed")
+            
+        print(f"Sent file {filename}")
+    except Exception as e:
+        print(f"Error sending file {filename}: {e}")
+        conn.sendall(b"ERROR\n")
+
+def receive_file_from_peer(conn, filename):
+    """Receive a file from peer"""
+    filepath = os.path.join(SHARED_FILES_DIR, filename)
+    try:
+        # Get file size
+        size = int(conn.recv(1024).decode().strip())
+        
+        # Signal ready to receive
+        conn.sendall(b"READY\n")
+        
+        # Receive file data
+        received = 0
+        with open(filepath, "wb") as f:
+            while received < size:
+                chunk = conn.recv(min(4096, size - received))
+                if not chunk:
+                    break
+                f.write(chunk)
+                received += len(chunk)
+        
+        # Confirm receipt
+        conn.sendall(b"RECEIVED\n")
+        print(f"Received file {filename}")
+        return True
+    except Exception as e:
+        print(f"Error receiving file {filename}: {e}")
+        return False
