@@ -3,12 +3,12 @@ import errno
 import threading
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
-
+import os
 from peerKeys import deserialize_public_key, KeyManager
-
+import peerDiscovery
 START_PORT = 5000
 MAX_PORT = 65535
-
+SHARED_FILES_DIR = "shared_files"
 # Start server
 def start_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -37,7 +37,8 @@ class ServerListener():
             b"INITIAL AUTHENTICATION": self.handle_initial_authentication,
             b"RENEW KEYS": self.handle_renew_keys,
             b"RECEIVE_FILE": self.handle_receive_file,
-            b"REQUEST_FILE": self.handle_receive_file #change later
+            b"REQUEST_FILE": self.handle_request_file, #change later
+            b"RECEIVE_CONSENT": self.handle_receive_consent
         }
 
     def stop(self):
@@ -145,3 +146,40 @@ class ServerListener():
             
         except Exception as e:
             print(f"Failed to save file {filename}: {e}")
+
+    def handle_request_file(self,addr,data):
+        print("addr", addr)
+        print("data", data)
+
+    def handle_receive_consent(self, addr, data):
+        print("addr", addr)
+        print("data", data)
+        # Handle the consent to receive a file from the peer
+        peer = self.peer_listener.peers.get(addr[0])
+        if not peer:
+            print(f"No peer found for address {addr[0]}")
+            return
+        
+        if data[2] == b"yes":
+            print("Peer consented to receive the file.")
+            # Proceed with file transfer logic here
+        else:
+            print("Peer declined the file transfer.")
+        #cmd line should be peer_display_name filename
+        filename = data[1].decode('utf-8')
+        peer_display_name = peer.name
+        
+        filepath = os.path.join(SHARED_FILES_DIR, filename)
+        if not os.path.exists(filepath):
+            print(f"File {filepath} does not exist.")
+            return
+            
+        try:
+            with open(filepath, "rb") as f:
+                file_data = f.read()
+            # Send the file data to the peer
+            peer.send_command(b"RECEIVE_FILE", file_data,filename.encode())
+            print(f"Successfully sent file {filename} to {peer_display_name}")
+        except Exception as e:
+            print(f"Error sending file: {e}")
+        pass
