@@ -233,10 +233,12 @@ class ServerListener():
         consent = input()
         if consent != "yes":
             #abort the operation
+            print("Sending denied consent")
             peer.send_command("NO_CONSENT",consent.encode())
         peer.send_command(b"FILE_LIST_PRINT",file_list)
 
     def handle_no_consent(self,addr,data):
+        print("hanlde_no_consent", data)
         #print if they want to receive file
         print(f"Peer {addr} has denied consent")
         #send message to peer that consent was denied
