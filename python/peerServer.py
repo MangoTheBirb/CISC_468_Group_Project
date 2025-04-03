@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives import hashes
 import os
 from peerKeys import deserialize_public_key, KeyManager
 import peerDiscovery
+from peerFiles import encrypt_file_AES, decrypt_file_AES
 START_PORT = 5000
 MAX_PORT = 65535
 SHARED_FILES_DIR = "shared_files"
@@ -129,24 +130,43 @@ class ServerListener():
 
 
     def handle_receive_file(self, addr, data):
-        # print("addr", addr)
-        # print("data", data)
-        
         try:
+            print(data)
             # Get the filename from data list (decode filename since it's text)
             filename = data[1].decode('utf-8')
             # Keep file_content as bytes without decoding
             file_content = data[2]
             
-            # Save the file in binary mode
-            with open(filename, "wb") as f:
-                filepath = os.path.join(SHARED_FILES_DIR, filename)
-                with open(filepath, "wb") as f:
-                    f.write(file_content)
-            print(f"Received file {filename} from {addr}")
+            # First save the received file
+            filepath = os.path.join(SHARED_FILES_DIR, filename)
+            with open(filepath, "wb") as f:
+                f.write(file_content)
+            print(filepath)
+            # Generate a 32-byte (256-bit) key for AES-256
+            key = os.urandom(32)
+            self.key_manager.store_aes_key(filename, key)
+
+            # Encrypt the saved file
+            encrypt_file_AES(filepath, key)
+            
+            print(f"Received and encrypted file {filename} from {addr}")
+            
+            # You might want to store or share the key securely
+            # For now, we'll just print it (in practice, you'd want to handle this more securely)
+            print(f"Encryption key (hex): {key.hex()}")
+
+            #key = self.key_manager.get_aes_key(filename)
+            #print(f"Decryption key (hex): {key.hex()}")
+            # Decrypt the file for verification (optional)
+            #decrypt_file_AES(filepath, key)
+
+
+            
+            
+
             
         except Exception as e:
-            print(f"Failed to save file {filename}: {e}")
+            print(f"Failed to handle received file: {e}")
 
     def handle_request_file(self, addr, data):
         # print("addr", addr)

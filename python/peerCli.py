@@ -2,7 +2,9 @@ import cmd
 import os
 from peerDiscovery import PeerConnectionListener
 from peerKeys import KeyManager, initialize_client_keys, serialize_public_key
-from peerFiles import remove_shared_file, add_shared_file, get_shared_files
+from peerFiles import remove_shared_file, add_shared_file, get_shared_files, decrypt_file_AES
+from Crypto.Cipher import AES
+
 SHARED_FILES_DIR = "shared_files"
 
 class CliManager(cmd.Cmd):
@@ -88,13 +90,39 @@ class CliManager(cmd.Cmd):
             return
             
         try:
+            # Get the AES key for this file
+            key = self.key_manager.get_aes_key(filename)
+            if not key:
+                print(f"No encryption key found for {filename}")
+                return
+                
+            # Create a temporary decrypted copy
+            temp_filepath = filepath + ".temp"
             with open(filepath, "rb") as f:
-                file_data = f.read()
-            # Send the file data to the peer
-            peer.send_command(b"RECEIVE_FILE", file_data, filepath.encode())
-            print(f"Successfully sent file {filename} to {peer_display_name}")
+                encrypted_data = f.read()
+                
+            # Save to temporary file
+            with open(temp_filepath, "wb") as f:
+                f.write(encrypted_data)
+                
+            # Decrypt the temporary file
+            decrypt_file_AES(temp_filepath, key)
+            
+            # Read the decrypted content
+            with open(temp_filepath, "rb") as f:
+                decrypted_data = f.read()
+                
+            # Clean up temporary file
+            os.remove(temp_filepath)
+            
+            # Send the decrypted file data to the peer
+            peer.send_command(b"RECEIVE_FILE", decrypted_data, filename.encode())
+            print(f"Successfully sent decrypted file {filename} to {peer_display_name}")
         except Exception as e:
             print(f"Error sending file: {e}")
+            # Clean up temporary file if it exists
+            if os.path.exists(temp_filepath):
+                os.remove(temp_filepath)
 
     def do_list_shared_files(self, line):
         """List all shared files"""

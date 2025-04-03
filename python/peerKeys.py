@@ -8,7 +8,9 @@ KEY_FILES_DIR = "keys"
 class KeyManager():
     def __init__(self):
         self.private_key, self.public_key = initialize_client_keys()
-
+        self.aes_keys = {}  # Dictionary to store AES keys for files
+        self._load_aes_keys() # Load existing AES keys from file
+        
     def set_new_keys(self, private_key, public_key):
         self.private_key = private_key
         self.public_key = public_key
@@ -25,6 +27,31 @@ class KeyManager():
 
     def get_serialized_public_key(self):
         return serialize_public_key(self.public_key)
+
+    def store_aes_key(self, filename, key):
+        """Store AES key for a file"""
+        self.aes_keys[filename] = key
+        self._save_aes_keys()  # Persist keys to file
+
+    def get_aes_key(self, filename):
+        """Retrieve AES key for a file"""
+        return self.aes_keys.get(filename)
+
+    def _save_aes_keys(self):
+        """Save AES keys to a file"""
+        aes_keys_path = os.path.join(KEY_FILES_DIR, "aes_keys.txt")
+        with open(aes_keys_path, "w") as f:
+            for filename, key in self.aes_keys.items():
+                f.write(f"{filename}:{key.hex()}\n")
+
+    def _load_aes_keys(self):
+        """Load AES keys from file"""
+        aes_keys_path = os.path.join(KEY_FILES_DIR, "aes_keys.txt")
+        if os.path.exists(aes_keys_path):
+            with open(aes_keys_path, "r") as f:
+                for line in f:
+                    filename, key_hex = line.strip().split(":")
+                    self.aes_keys[filename] = bytes.fromhex(key_hex)
 
 def initialize_client_keys(renew=False):
     if not os.path.exists(KEY_FILES_DIR):
