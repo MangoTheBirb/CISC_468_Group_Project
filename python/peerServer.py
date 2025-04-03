@@ -38,7 +38,8 @@ class ServerListener():
             b"INITIAL AUTHENTICATION": self.handle_initial_authentication,
             b"RENEW KEYS": self.handle_renew_keys,
             b"RECEIVE_FILE": self.handle_receive_file,
-            b"REQUEST_FILE": self.handle_request_file
+            b"REQUEST_FILE": self.handle_request_file,
+            b"FILE_LIST": self.handle_file_list
         }
 
     def stop(self):
@@ -204,3 +205,19 @@ class ServerListener():
             print(f"Successfully sent file {filename} to {peer_display_name}")
         except Exception as e:
             print(f"Error sending file: {e}")
+
+    def handle_file_list(self, addr, data):
+        print(addr)
+        print(data)
+
+        #example: b'123.txt\ntest.xt'
+        file_list = data[1]
+
+        #split by \n
+        file_list = file_list.split(b"\n")
+        #decode each file name to utf-8
+        file_list = [file.decode('utf-8') for file in file_list]
+        #print file_list
+        print(f"Peer {addr} has the following files:")
+        for file in file_list:
+            print(file)

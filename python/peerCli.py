@@ -134,6 +134,45 @@ class CliManager(cmd.Cmd):
         for file in get_shared_files():
             print(file)
 
+    def do_send_file_list(self,line):
+        """Send a list of all shared files to a given peer.
+        send_file_list <peer_display_name>"""
+        print("line: ", line)
+        parts = line.strip().split()
+        
+        
+        if len(parts) != 1:
+            print("Usage: send_file_list <peer_display_name>")
+            return
+        
+        peer_display_name = parts[0]
+
+        files = get_shared_files()
+        print(files)
+        if len(files) == 0:
+            print("No files in shared folder.")
+            return
+        
+        # Find the peer in the peer list
+        peer = None
+        for p in self.peer_listener.peers.values():
+            if p.display_name == peer_display_name:
+                peer = p
+                break
+        
+        if peer is None:
+            print(f"Peer {peer_display_name} not found.")
+            return
+        
+        # Send the list of files to the peer
+        file_list = "\n".join(files).encode()
+        peer.send_command(b"FILE_LIST", file_list)
+        
+
+
+
+        
+        
     def do_add_shared_file(self, line):
         """Add a file to the shared directory and make it available to peers.
         add_shared_file <filepath>"""
@@ -153,6 +192,9 @@ class CliManager(cmd.Cmd):
         print("Connected peers:")
         for peer in self.peer_listener.peers.values():
             print(f"{peer.display_name} ({peer.ip})")
+
+    
+
 
     def do_exit(self, arg):
         """Exit the P2P client"""
