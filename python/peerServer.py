@@ -159,9 +159,27 @@ class ServerListener():
 
         peer = self.peer_listener.peers.get(addr[0])
         print("peer", peer)
+        peer_display_name = peer.name
         #find peer using addr
+        filename = data[1].decode('utf-8')
+        peer_display_name = peer.name
 
-        peer.send_command(b"RECEIVE_CONSENT", consent.encode(),data[1])
+        filepath = os.path.join(SHARED_FILES_DIR, filename)
+        if not os.path.exists(filepath):
+            print(f"File {filepath} does not exist.")
+            return
+            
+        try:
+            with open(filepath, "rb") as f:
+                file_data = f.read()
+            # Send the file data to the peer
+            peer.send_command(b"RECEIVE_FILE", file_data,filename.encode())
+            print(f"Successfully sent file {filename} to {peer_display_name}")
+        except Exception as e:
+            print(f"Error sending file: {e}")
+        pass
+        peer.send_command(b"RECEIVE_FILE",file_data,filename.encode())
+        #peer.send_command(b"RECEIVE_CONSENT", consent.encode(),data[1])
 
     def handle_receive_consent(self, addr, data):
         print("addr", addr)
