@@ -94,15 +94,21 @@ class PeerConnectionListener(ServiceListener):
                 # Ignore self-discovery
                 if peer_ip != self.local_ip or name != self.service_name:
                     peer_info = PeerInfo(name, peer_ip, peer_port, info.properties, self.key_manager)
-                    print(f"Peer added: {peer_info}")
+                    # Check if the peer is already in the list
+                    existing_peer = self.peers.get(peer_ip)
+                    if existing_peer:
+                        # Grab the public key from the existing peer
+                        peer_info.public_key = existing_peer.public_key
+                        print(f"Peer updated: {peer_info}")
                     self._internal_peers.update({name: peer_info})
                     self.peers.update({peer_ip: peer_info})
+                    print(f"Peer added: {peer_info}")
                     # Connect to the discovered peer
                     peer_info.authenticate_self_to_peer()
                     #threading.Thread(target=self.connect_to_peer, args=(peer_ip, peer_port)).start()
         finally:
             self.peers_lock.release()
-
+            
     def set_peer_public_key(self, peer_ip, public_key):
         self.peers_lock.acquire()
         try:
