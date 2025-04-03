@@ -56,16 +56,13 @@ class PeerInfo():
         conn = None
         print(f"Sending command {command} to peer {self.ip}:{self.port}")
         print(f"Message: {message}")
-        print(f"Filename: {filename}")
         
         try:
             signed_message = self.key_manager.sign_message(message)
             conn = socket.create_connection((self.ip, self.port))
             if filename:
-                print("here1")
                 conn.sendall(command + b"\r\n" + filename + b"\r\n" +  message + b"\r\n" + signed_message)
             else:
-                print("here2")
                 conn.sendall(command + b"\r\n" + message + b"\r\n" + signed_message)
         except Exception as e:
             print(f"Failed to send command {command} to peer {self.ip}:{self.port}: {e}")

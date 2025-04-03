@@ -2,7 +2,6 @@ import socket
 import threading
 
 PEER_DISCOVERY_PORT = 9999
-FILE_TRANSFER_PORT = 10000
 SHARED_FOLDER = "./shared_files"
 
 def discover_client():
