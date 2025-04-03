@@ -151,6 +151,18 @@ class ServerListener():
         print("addr", addr)
         print("data", data)
 
+        #print if they want to receive file
+        #print(data[1])
+
+        #receive input
+        consent = input(f"Peer {addr} is requesting file {data[1]}. Do you consent? (yes/no): ")
+
+        peer = self.peer_listener.peers.get(addr[0])
+        print("peer", peer)
+        #find peer using addr
+
+        peer.send_command(b"RECEIVE_CONSENT", consent.encode(),data[1])
+
     def handle_receive_consent(self, addr, data):
         print("addr", addr)
         print("data", data)
@@ -168,7 +180,7 @@ class ServerListener():
         #cmd line should be peer_display_name filename
         filename = data[1].decode('utf-8')
         peer_display_name = peer.name
-        
+
         filepath = os.path.join(SHARED_FILES_DIR, filename)
         if not os.path.exists(filepath):
             print(f"File {filepath} does not exist.")
