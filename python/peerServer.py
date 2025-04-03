@@ -225,22 +225,24 @@ class ServerListener():
         for file in file_list:
             print(file)
 
-    def handle_file_list_request(self,addr,data):
-        
+    def handle_file_list_request(self, addr, data):
         file_list = data[1]
         peer = self.peer_listener.peers.get(addr[0])
-        input(print(f"Peer {addr} is requesting file list. Do you consent? (yes/no): ", end="", flush=True))
-        consent = input()
-        if consent != "yes":
-            #abort the operation
+        
+        # Fix: Remove the input() around print() and get consent properly
+        print(f"Peer {addr} is requesting file list.", end="", flush=True)
+        consent = input("Do you consent? (yes/no): ")
+        
+        if consent.lower() != "yes":
             print("Sending denied consent")
-            peer.send_command("NO_CONSENT",consent.encode())
-        peer.send_command(b"FILE_LIST_PRINT",file_list)
+            peer.send_command(b"NO_CONSENT", b"File list request denied")
+            return
+            
+        # If consent given, send the file list
+        peer.send_command(b"FILE_LIST_PRINT", file_list)
 
     def handle_no_consent(self,addr,data):
         print("hanlde_no_consent", data)
         #print if they want to receive file
         print(f"Peer {addr} has denied consent")
-        #send message to peer that consent was denied
-        peer = self.peer_listener.peers.get(addr[0])
-        peer.send_command(b"NO_CONSENT", data[1])
+
