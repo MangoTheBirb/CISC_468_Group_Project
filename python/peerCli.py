@@ -167,12 +167,11 @@ class CliManager(cmd.Cmd):
         # Send the list of files to the peer
         file_list = "\n".join(files).encode()
         peer.send_command(b"FILE_LIST", file_list)
-        
+    
+    def do_request_file_list(self,line):
+        pass
 
 
-
-        
-        
     def do_add_shared_file(self, line):
         """Add a file to the shared directory and make it available to peers.
         add_shared_file <filepath>"""
