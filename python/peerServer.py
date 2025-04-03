@@ -7,6 +7,7 @@ import os
 from peerKeys import deserialize_public_key, KeyManager
 import peerDiscovery
 from peerFiles import encrypt_file_AES, decrypt_file_AES
+
 START_PORT = 5000
 MAX_PORT = 65535
 SHARED_FILES_DIR = "shared_files"
@@ -39,7 +40,8 @@ class ServerListener():
             b"RENEW KEYS": self.handle_renew_keys,
             b"RECEIVE_FILE": self.handle_receive_file,
             b"REQUEST_FILE": self.handle_request_file,
-            b"FILE_LIST": self.handle_file_list
+            b"FILE_LIST_REQUEST":self.handle_file_list_print,
+            b"FILE_LIST_PRINT": self.handle_file_list
         }
 
     def stop(self):
@@ -206,7 +208,7 @@ class ServerListener():
         except Exception as e:
             print(f"Error sending file: {e}")
 
-    def handle_file_list(self, addr, data):
+    def handle_file_list_print(self, addr, data):
         print(addr)
         print(data)
 
@@ -221,3 +223,8 @@ class ServerListener():
         print(f"Peer {addr} has the following files:")
         for file in file_list:
             print(file)
+
+    def handle_file_list_request(self,addr,data):
+        file_list = data[1]
+        peer = self.peer_listener.peers.get(addr[0])
+        peer.send_command(b"FILE_LIST_PRINT",file_list.encode())
