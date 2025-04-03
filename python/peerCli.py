@@ -169,8 +169,8 @@ class CliManager(cmd.Cmd):
         peer.send_command(b"FILE_LIST_PRINT", file_list)
     
     def do_request_file_list(self,line):
-        """Send a list of all shared files to a given peer.
-        send_file_list <peer_display_name>"""
+        """Get list of all shared files to a given peer.
+        request_file_list <peer_display_name>"""
         print("line: ", line)
         parts = line.strip().split()
         

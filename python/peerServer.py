@@ -40,8 +40,8 @@ class ServerListener():
             b"RENEW KEYS": self.handle_renew_keys,
             b"RECEIVE_FILE": self.handle_receive_file,
             b"REQUEST_FILE": self.handle_request_file,
-            b"FILE_LIST_REQUEST":self.handle_file_list_print,
-            b"FILE_LIST_PRINT": self.handle_file_list
+            b"FILE_LIST_REQUEST":self.handle_file_list_request,
+            b"FILE_LIST_PRINT": self.handle_file_list_print
         }
 
     def stop(self):
