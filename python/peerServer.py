@@ -191,73 +191,126 @@ class ServerListener():
             print(f"Failed to handle received file: {e}")
 
     def handle_request_file(self, addr, data):
-        # print("addr", addr)
-        # print("data", data)
-
-        #print if they want to receive file
-        #print(data[1])
-
-        #receive input
-        print(f"Peer {addr} is requesting file {data[1].decode('utf-8')}.", end="", flush=True)
-        consent = input("Do you consent? (yes/no): ")
-        
-        peer = self.peer_listener.peers.get(addr[0])
-
-        if consent != "yes":
-            str = "Denied consent to give file: {data[1]}"
-            peer.send_command(b"REQUEST_FILE", str.encode())
-            return
-        
-        peer_display_name = peer.name
-        
-        #find peer using addr
-        filename = data[1].decode('utf-8')
-
-        filepath = os.path.join(SHARED_FILES_DIR, filename)
-        if not os.path.exists(filepath):
-            print(f"File {filepath} does not exist.")
-            return
-            
         try:
-            with open(filepath, "rb") as f:
-                file_data = f.read()
-            # Send the file data to the peer
-            peer.send_command(b"RECEIVE_FILE", file_data, filename.encode())
-            print(f"Successfully sent file {filename} to {peer_display_name}")
+            filename = data[1].decode('utf-8')
+            peer_info = self.peer_listener.peers.get(addr[0], None)
+            
+            if not peer_info:
+                raise Exception(f"Peer {addr} not found")
+            
+            # Display request and ask for consent
+            print(f"\nPeer {peer_info.display_name} ({addr[0]}) is requesting file '{filename}'.")
+            consent = input(f"Do you consent to send this file? (yes/no): ")
+            
+            # Restore command prompt
+            print("(Command) > ", end='', flush=True)
+            
+            if consent.lower() == "yes":
+                print(f"Sending file {filename} to {peer_info.display_name}...")
+                # Rest of the file sending logic
+                filepath = os.path.join(SHARED_FILES_DIR, filename)
+                if not os.path.exists(filepath):
+                    print(f"File {filename} not found in shared directory.")
+                    peer_info.send_command(b"NO_CONSENT", f"File {filename} not found".encode())
+                    return
+                    
+                # Get the AES key for this file
+                key = self.key_manager.get_aes_key(filename)
+                if not key:
+                    print(f"No encryption key found for {filename}")
+                    peer_info.send_command(b"NO_CONSENT", f"No encryption key found for {filename}".encode())
+                    return
+                    
+                # Create a temporary decrypted copy
+                temp_filepath = filepath + ".temp"
+                with open(filepath, "rb") as f:
+                    encrypted_data = f.read()
+                    
+                # Save to temporary file
+                with open(temp_filepath, "wb") as f:
+                    f.write(encrypted_data)
+                    
+                # Decrypt the temporary file
+                decrypt_file_AES(temp_filepath, key)
+                
+                # Read the decrypted content
+                with open(temp_filepath, "rb") as f:
+                    decrypted_data = f.read()
+                    
+                # Clean up temporary file
+                os.remove(temp_filepath)
+                
+                # Send the file
+                peer_info.send_command(b"RECEIVE_FILE", decrypted_data, filename.encode())
+                print(f"File {filename} sent to {peer_info.display_name}")
+            else:
+                print(f"Consent denied for file {filename}")
+                peer_info.send_command(b"NO_CONSENT", f"Consent denied for file {filename}".encode())
         except Exception as e:
-            print(f"Error sending file: {e}")
+            print(f"Error processing file request: {e}")
+            # Try to notify the peer about the error
+            try:
+                if peer_info:
+                    peer_info.send_command(b"NO_CONSENT", f"Error: {str(e)}".encode())
+            except:
+                pass
 
     def handle_file_list_print(self, addr, data):
-        print(addr)
-        print(data)
-
-        #example: b'123.txt\ntest.xt'
-        file_list = data[1]
-
-        #split by \n
-        file_list = file_list.split(b"\n")
-        #decode each file name to utf-8
-        file_list = [file.decode('utf-8') for file in file_list]
-        #print file_list
-        print(f"Peer {addr} has the following files:")
-        for file in file_list:
-            print(file)
+        try:
+            # First print a newline to separate from the current command line
+            print("\n")
+            file_list = data[1].decode('utf-8').split('\n')
+            peer_info = self.peer_listener.peers.get(addr[0], None)
+            peer_name = peer_info.display_name if peer_info else addr[0]
+            
+            print(f"Files from peer {peer_name}:")
+            for file in file_list:
+                if file.strip():
+                    print(f"- {file}")
+            
+            # Restore command prompt
+            print("(Command) > ", end='', flush=True)
+        except Exception as e:
+            print(f"Error displaying file list: {e}")
+            # Restore command prompt
+            print("(Command) > ", end='', flush=True)
 
     def handle_file_list_request(self, addr, data):
-        file_list = data[1]
-        peer = self.peer_listener.peers.get(addr[0])
-        
-        # Fix: Remove the input() around print() and get consent properly
-        print(f"Peer {addr} is requesting file list.", end="", flush=True)
-        consent = input("Do you consent? (yes/no): ")
-        
-        if consent.lower() != "yes":
-            print("Sending denied consent")
-            peer.send_command(b"NO_CONSENT", b"File list request denied")
-            return
+        try:
+            peer_info = self.peer_listener.peers.get(addr[0], None)
+            peer_name = peer_info.display_name if peer_info else addr[0]
             
-        # If consent given, send the file list
-        peer.send_command(b"FILE_LIST_PRINT", file_list)
+            print(f"\nPeer {peer_name} is requesting your file list.")
+            consent = input("Do you consent to share your file list? (yes/no): ")
+            
+            # Restore command prompt
+            print("(Command) > ", end='', flush=True)
+            
+            if consent.lower() == "yes":
+                # Send our file list to the peer
+                from peerFiles import get_shared_files
+                files = get_shared_files()
+                
+                if not files:
+                    # If no files to share
+                    if peer_info:
+                        peer_info.send_command(b"FILE_LIST_PRINT", "No shared files available".encode())
+                    print(f"Sent empty file list to {peer_name}")
+                    return
+                
+                # Send the list of files to the peer
+                file_list = "\n".join(files).encode()
+                if peer_info:
+                    peer_info.send_command(b"FILE_LIST_PRINT", file_list)
+                    print(f"Sent file list to {peer_name}")
+            else:
+                print(f"Denied file list request from {peer_name}")
+                if peer_info:
+                    peer_info.send_command(b"NO_CONSENT", "File list request denied".encode())
+        except Exception as e:
+            print(f"Error handling file list request: {e}")
+            # Restore command prompt
+            print("(Command) > ", end='', flush=True)
 
     def handle_no_consent(self,addr,data):
         print("hanlde_no_consent", data)

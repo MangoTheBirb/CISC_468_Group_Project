@@ -174,9 +174,16 @@ def main():
         server_thread = ServerListener(server, peer_listener, key_manager)
         server_thread.run()
         print("Client has started listening for connections.")
+        
         # Start CLI
         cli_manager = CliManager(peer_listener, key_manager)
-        cli_manager.cmdloop()
+        
+        # Use a separate thread for handling input to prevent blocking
+        try:
+            cli_manager.cmdloop()
+        except KeyboardInterrupt:
+            print("\nExiting CLI...")
+            
     except KeyboardInterrupt:
         print("Shutting down Client...")
     finally:

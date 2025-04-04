@@ -1,5 +1,7 @@
 import cmd
 import os
+import threading
+import sys
 from peerDiscovery import PeerConnectionListener
 from peerKeys import KeyManager, initialize_client_keys, serialize_public_key
 from peerFiles import remove_shared_file, add_shared_file, get_shared_files, decrypt_file_AES
@@ -17,6 +19,22 @@ class CliManager(cmd.Cmd):
 
         self.prompt = "(Command) > "
         self.intro = "Welcome to the P2P client. Type 'help' for a list of commands."
+        
+        # Set empty_line_behavior to prevent automatic re-execution of last command
+        self.empty_line_behavior = False
+    
+    # Override the empty_line method to do nothing
+    def emptyline(self):
+        pass
+        
+    # Override onecmd to control behavior
+    def onecmd(self, line):
+        """Override the onecmd method to handle commands without auto-execution"""
+        try:
+            return super().onecmd(line)
+        except Exception as e:
+            print(f"Error executing command: {e}")
+            return False
 
     def default(self, line):
         """Handle unrecognized commands"""
