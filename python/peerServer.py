@@ -46,6 +46,7 @@ class ServerListener():
             b"INITIAL AUTHENTICATION": self.handle_initial_authentication,
             b"REQUEST_AUTHENTICATION": self.handle_request_authentication,
             b"RENEW KEYS": self.handle_renew_keys,
+            b"RENEW KEYS_ENCRYPTED": self.handle_renew_keys_encrypted,
             b"RECEIVE_FILE": self.handle_receive_file,
             b"RECEIVE_FILE_ENCRYPTED": self.handle_receive_file_encrypted,
             b"REQUEST_FILE": self.handle_request_file,
@@ -155,7 +156,42 @@ class ServerListener():
         except Exception as e:
             print(f"Failed to renew keys for peer {addr}: {e}")
 
-
+    def handle_renew_keys_encrypted(self, addr, data: list):
+        try:
+            peer_info = self.peer_listener.peers.get(addr[0], None)
+            if not peer_info:
+                raise Exception(f"Peer {addr} not found")
+            if peer_info.public_key is None:
+                raise Exception(f"Peer {addr} has no public key")
+                
+            # Decrypt the message
+            encrypted_key_bytes = data[1]
+            new_public_key_bytes = self.decrypt_message_from_peer(addr[0], encrypted_key_bytes)
+            
+            # Get signature from data
+            encrypted_signature = data[2]
+            signed_key = self.decrypt_message_from_peer(addr[0], encrypted_signature)
+            
+            # Deserialize the public key
+            new_public_key = deserialize_public_key(new_public_key_bytes)
+            
+            # Verify the signed key
+            peer_info.public_key.verify(
+                signed_key,
+                new_public_key_bytes,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+            
+            # Update the peer's public key
+            self.peer_listener.set_peer_public_key(addr[0], new_public_key)
+            print(f"Peer {addr} renewed keys (encrypted)")
+        except Exception as e:
+            print(f"Failed to renew keys for peer {addr}: {e}")
+    
     def handle_receive_file(self, addr, data):
         try:
             print(data)
