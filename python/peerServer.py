@@ -138,9 +138,18 @@ class ServerListener():
                 raise Exception(f"Peer {addr} not found")
             if peer_info.public_key is None:
                 raise Exception(f"Peer {addr} has no public key")
+                
+            # The new serialized public key is in the message
             new_public_key_bytes = data[1]
+            # The signature is in the third element if available
+            if len(data) > 2:
+                signed_key = data[2]
+            else:
+                raise Exception(f"Missing signature for renewed key from peer {addr}")
+                
+            # Deserialize the public key
             new_public_key = deserialize_public_key(new_public_key_bytes)
-            signed_key = data[2]
+            
             # Verify the signed key
             peer_info.public_key.verify(
                 signed_key,
@@ -151,6 +160,8 @@ class ServerListener():
                 ),
                 hashes.SHA256()
             )
+            
+            # Update the peer's public key
             self.peer_listener.set_peer_public_key(addr[0], new_public_key)
             print(f"Peer {addr} renewed keys")
         except Exception as e:
@@ -163,6 +174,10 @@ class ServerListener():
                 raise Exception(f"Peer {addr} not found")
             if peer_info.public_key is None:
                 raise Exception(f"Peer {addr} has no public key")
+                
+            # Ensure we have the encrypted key bytes and signature
+            if len(data) < 3:
+                raise Exception(f"Incomplete encrypted key renewal data from peer {addr}")
                 
             # Decrypt the message
             encrypted_key_bytes = data[1]

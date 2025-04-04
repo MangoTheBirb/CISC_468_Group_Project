@@ -46,10 +46,16 @@ class CliManager(cmd.Cmd):
         private_key, public_key = initialize_client_keys(renew=True)
         # Notify peers of the new public key
         serialized_public_key = serialize_public_key(public_key)
-        for peer in self.peer_listener.peers.values():
-            peer.send_command(b"RENEW KEYS", serialized_public_key)
+        # Sign the new public key with the old private key before updating
+        signed_key = self.key_manager.sign_message(serialized_public_key)
+        
         # Set the new keys
         self.key_manager.set_new_keys(private_key, public_key)
+        
+        # Send to all peers
+        for peer in self.peer_listener.peers.values():
+            peer.send_command(b"RENEW KEYS", serialized_public_key, signed_key)
+            
         print("Keys renewed.")
 
     def do_request_file(self, line):
@@ -76,8 +82,13 @@ class CliManager(cmd.Cmd):
         if peer is None:
             print(f"Peer {peer_display_name} not found.")
             return
+        
+        # Encode the filename and sign it
+        filename_encoded = filename.encode()
+        signed_filename = self.key_manager.sign_message(filename_encoded)
+        
         #Send the request to the peer
-        peer.send_command(b"REQUEST_FILE", filename.encode())
+        peer.send_command(b"REQUEST_FILE", filename_encoded, signed_filename)
 
     def do_send_file(self, line):
         """Send a shared file to a given peer.
@@ -133,8 +144,11 @@ class CliManager(cmd.Cmd):
             # Clean up temporary file
             os.remove(temp_filepath)
             
+            # Sign the file data
+            signed_data = self.key_manager.sign_message(decrypted_data)
+            
             # Send the decrypted file data to the peer
-            peer.send_command(b"RECEIVE_FILE", decrypted_data, filename.encode())
+            peer.send_command(b"RECEIVE_FILE", decrypted_data, signed_data, filename.encode())
             print(f"Successfully sent decrypted file {filename} to {peer_display_name}")
         except Exception as e:
             print(f"Error sending file: {e}")
@@ -184,7 +198,9 @@ class CliManager(cmd.Cmd):
         
         # Send the list of files to the peer
         file_list = "\n".join(files).encode()
-        peer.send_command(b"FILE_LIST_PRINT", file_list)
+        # Sign the file list
+        signed_file_list = self.key_manager.sign_message(file_list)
+        peer.send_command(b"FILE_LIST_PRINT", file_list, signed_file_list)
     
     def do_request_file_list(self,line):
         """Get list of all shared files to a given peer.
@@ -218,9 +234,9 @@ class CliManager(cmd.Cmd):
         
         # Send the list of files to the peer
         file_list = "\n".join(files).encode()
-        peer.send_command(b"FILE_LIST_REQUEST", file_list)
-        pass
-
+        # Sign the file list
+        signed_file_list = self.key_manager.sign_message(file_list)
+        peer.send_command(b"FILE_LIST_REQUEST", file_list, signed_file_list)
 
     def do_add_shared_file(self, line):
         """Add a file to the shared directory and make it available to peers.

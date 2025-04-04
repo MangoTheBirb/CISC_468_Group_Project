@@ -337,7 +337,7 @@ class PeerInfo():
             if conn:
                 conn.close()
 
-    def send_command(self, command, message=None, filename=None):
+    def send_command(self, command, message=None, signed_data=None, filename=None):
         conn = None
         print(f"Sending command {command} to peer {self.ip}:{self.port}")
         print(f"Message: {message}")
@@ -358,7 +358,9 @@ class PeerInfo():
                     # Wait again for potential response
                     time.sleep(1)
             
-            signed_message = self.key_manager.sign_message(message)
+            # Only sign the message if no signed data was explicitly provided
+            if not signed_data and message is not None:
+                signed_data = self.key_manager.sign_message(message)
             
             # Check for active session
             session = self.active_sessions.get(self.ip)
@@ -397,18 +399,28 @@ class PeerInfo():
                     # If there's no message, create an empty encrypted message
                     encrypted_message = encrypt_data_with_session_key(b"", session.session_key)
                 
-                # Send the command with encrypted message
-                if filename:
-                    conn.sendall(command_with_flag + b"\r\n" + filename + b"\r\n" + encrypted_message + b"\r\n" + signed_message)
+                # Encrypt signed data if it exists
+                if signed_data:
+                    encrypted_signed_data = encrypt_data_with_session_key(signed_data, session.session_key)
                 else:
-                    conn.sendall(command_with_flag + b"\r\n" + encrypted_message + b"\r\n" + signed_message)
+                    encrypted_signed_data = encrypt_data_with_session_key(b"", session.session_key)
+                
+                # Send the command with encrypted message and encrypted signed data
+                if filename:
+                    conn.sendall(command_with_flag + b"\r\n" + filename + b"\r\n" + encrypted_message + b"\r\n" + encrypted_signed_data)
+                else:
+                    conn.sendall(command_with_flag + b"\r\n" + encrypted_message + b"\r\n" + encrypted_signed_data)
                 
                 print(f"Message encrypted with session key and sent to {self.ip}")
             else:
+                # Handle unencrypted message with signed data
                 if filename:
-                    conn.sendall(command + b"\r\n" + filename + b"\r\n" + message + b"\r\n" + signed_message)
+                    conn.sendall(command + b"\r\n" + filename + b"\r\n" + message + b"\r\n" + signed_data)
                 else:
-                    conn.sendall(command + b"\r\n" + message + b"\r\n" + signed_message)
+                    if signed_data:
+                        conn.sendall(command + b"\r\n" + message + b"\r\n" + signed_data)
+                    else:
+                        conn.sendall(command + b"\r\n" + message + b"\r\n" + self.key_manager.sign_message(message))
         except Exception as e:
             print(f"Failed to send command {command} to peer {self.ip}:{self.port}: {e}")
         finally:
