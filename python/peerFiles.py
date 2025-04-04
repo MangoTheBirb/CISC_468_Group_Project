@@ -1,6 +1,7 @@
 import os
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
+from Crypto.Random import get_random_bytes
 SHARED_FILES_DIR = "shared_files"
 
 def initialize_shared_files():
@@ -72,3 +73,40 @@ def decrypt_file_AES(filepath, key):
     # Write decrypted data back to file
     with open(filepath, 'wb') as f:
         f.write(plaintext)
+
+def encrypt_data_with_session_key(data, key):
+    """Encrypt data with a session key using AES-CBC"""
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import pad
+    from Crypto.Random import get_random_bytes
+    
+    # Generate a random IV
+    iv = get_random_bytes(AES.block_size)
+    
+    # Create cipher
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    
+    # Encrypt data
+    padded_data = pad(data, AES.block_size)
+    ciphertext = cipher.encrypt(padded_data)
+    
+    # Return IV + ciphertext
+    return iv + ciphertext
+
+def decrypt_data_with_session_key(data, key):
+    """Decrypt data with a session key using AES-CBC"""
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import unpad
+    
+    # Extract IV
+    iv = data[:AES.block_size]
+    ciphertext = data[AES.block_size:]
+    
+    # Create cipher
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    
+    # Decrypt and unpad
+    padded_plaintext = cipher.decrypt(ciphertext)
+    plaintext = unpad(padded_plaintext, AES.block_size)
+    
+    return plaintext

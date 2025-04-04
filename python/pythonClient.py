@@ -7,7 +7,7 @@ from peerDiscovery import register_service, discover_peers
 from peerServer import start_server, ServerListener
 from peerKeys import KeyManager, serialize_public_key, deserialize_public_key
 from peerCli import CliManager
-from peerFiles import initialize_shared_files, get_shared_files
+from peerFiles import initialize_shared_files, get_shared_files, encrypt_data_with_session_key, decrypt_data_with_session_key
 
 # Configuration
 SERVICE_NAME_TEMPLATE = "Peer-{hostname}._p2pfileshare._tcp.local."
